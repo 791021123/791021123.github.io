@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>磁盘调度算法模拟器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#8B5CF6',
+                        neutral: '#1F2937',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-smooth {
+                transition: all 0.3s ease;
+            }
+            .shadow-card {
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+            .bg-gradient-blue {
+                background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-neutral">
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        <header class="text-center mb-10">
+            <h1 class="text-[clamp(2rem,5vw,3rem)] font-bold text-neutral mb-2">磁盘调度算法模拟器</h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">直观比较不同磁盘调度算法的性能和效率</p>
+        </header>
+
+        <div class="grid md:grid-cols-3 gap-8">
+            <!-- 输入面板 -->
+            <div class="md:col-span-1">
+                <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg">
+                    <h2 class="text-xl font-semibold text-neutral mb-4 flex items-center">
+                        <i class="fa fa-sliders text-primary mr-2"></i>参数设置
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">当前磁头位置</label>
+                            <input type="number" id="head" value="50" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-smooth">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">请求序列 (逗号分隔)</label>
+                            <input type="text" id="requests" value="82,170,43,140,24,16,190" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-smooth">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">磁道总数 (SCAN用)</label>
+                            <input type="number" id="maxTrack" value="200" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-smooth">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">扫描方向 (SCAN用)</label>
+                            <select id="direction" 
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-smooth">
+                                <option value="right">向右</option>
+                                <option value="left">向左</option>
+                            </select>
+                        </div>
+                        
+                        <button onclick="calculate()" 
+                            class="w-full bg-gradient-blue text-white font-medium py-2.5 px-4 rounded-md transition-smooth hover:opacity-90 flex items-center justify-center">
+                            <i class="fa fa-calculator mr-2"></i>开始计算
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 结果展示 -->
+            <div class="md:col-span-2">
+                <div id="results" class="space-y-6">
+                    <!-- 结果将在这里动态显示 -->
+                    <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg text-center py-12">
+                        <i class="fa fa-info-circle text-gray-400 text-4xl mb-3"></i>
+                        <p class="text-gray-500">请输入参数并点击"开始计算"按钮</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-12 bg-white rounded-xl shadow-card p-6">
+            <h2 class="text-xl font-semibold text-neutral mb-4 flex items-center">
+                <i class="fa fa-book text-accent mr-2"></i>算法说明
+            </h2>
+            
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="p-4 rounded-lg bg-blue-50 border-l-4 border-primary">
+                    <h3 class="font-medium text-primary mb-2">FCFS</h3>
+                    <p class="text-sm text-gray-700">先来先服务，按照请求到达的顺序依次处理。实现简单，但平均寻道时间可能较长。</p>
+                </div>
+                
+                <div class="p-4 rounded-lg bg-green-50 border-l-4 border-secondary">
+                    <h3 class="font-medium text-secondary mb-2">SSTF</h3>
+                    <p class="text-sm text-gray-700">最短寻道时间优先，优先处理距离当前磁头最近的请求。可能导致某些请求长时间得不到处理。</p>
+                </div>
+                
+                <div class="p-4 rounded-lg bg-purple-50 border-l-4 border-accent">
+                    <h3 class="font-medium text-accent mb-2">SCAN</h3>
+                    <p class="text-sm text-gray-700">电梯算法，磁头向一个方向移动并处理请求，到达边界后反转方向。避免了SSTF的饥饿问题。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function calculate() {
+            try {
+                // 获取并验证输入值
+                const head = parseInt(document.getElementById('head').value);
+                const requestsInput = document.getElementById('requests').value;
+                const maxTrack = parseInt(document.getElementById('maxTrack').value);
+                const direction = document.getElementById('direction').value;
+                
+                // 验证输入
+                if (isNaN(head) || head < 0) {
+                    throw new Error("请输入有效的当前磁头位置（非负整数）");
+                }
+                
+                if (!requestsInput.trim()) {
+                    throw new Error("请求序列不能为空");
+                }
+                
+                const requests = requestsInput.split(',')
+                    .map(num => {
+                        const parsed = parseInt(num.trim());
+                        if (isNaN(parsed) || parsed < 0) {
+                            throw new Error("请求序列必须是用逗号分隔的非负整数");
+                        }
+                        return parsed;
+                    });
+                
+                if (isNaN(maxTrack) || maxTrack <= 0) {
+                    throw new Error("请输入有效的磁道总数（正整数）");
+                }
+                
+                // 执行所有算法
+                const results = {
+                    fcfs: FCFS(head, [...requests]),
+                    sstf: SSTF(head, [...requests]),
+                    scan: SCAN(head, [...requests], maxTrack, direction)
+                };
+                
+                // 显示结果
+                displayResults(results);
+            } catch (error) {
+                displayError(error.message);
+            }
+        }
+
+        // FCFS 算法
+        function FCFS(head, requests) {
+            let sequence = [head];
+            let total = 0;
+            
+            requests.forEach(req => {
+                total += Math.abs(req - sequence[sequence.length-1]);
+                sequence.push(req);
+            });
+            
+            return {
+                sequence,
+                total,
+                avg: total / requests.length
+            };
+        }
+
+        // SSTF 算法
+        function SSTF(head, requests) {
+            let sequence = [head];
+            let temp = [...requests];
+            let total = 0;
+            let current = head;
+
+            while(temp.length > 0) {
+                const closest = temp.reduce((prev, curr) => 
+                    Math.abs(curr - current) < Math.abs(prev - current) ? curr : prev
+                );
+                total += Math.abs(closest - current);
+                current = closest;
+                sequence.push(closest);
+                temp.splice(temp.indexOf(closest), 1);
+            }
+
+            return {
+                sequence,
+                total,
+                avg: total / requests.length
+            };
+        }
+
+        // SCAN 算法
+        function SCAN(head, requests, maxTrack, direction) {
+            let sequence = [head];
+            let total = 0;
+            let current = head;
+
+            const left = requests.filter(req => req < head).sort((a,b) => b-a);
+            const right = requests.filter(req => req >= head).sort((a,b) => a-b);
+
+            if(direction === 'right') {
+                right.forEach(req => {
+                    total += Math.abs(req - current);
+                    current = req;
+                    sequence.push(req);
+                });
+                if(current !== maxTrack - 1) {
+                    total += Math.abs((maxTrack - 1) - current);
+                    sequence.push(maxTrack - 1);
+                    current = maxTrack - 1;
+                }
+                left.forEach(req => {
+                    total += Math.abs(req - current);
+                    current = req;
+                    sequence.push(req);
+                });
+            } else {
+                left.forEach(req => {
+                    total += Math.abs(req - current);
+                    current = req;
+                    sequence.push(req);
+                });
+                if(current !== 0) {
+                    total += Math.abs(0 - current);
+                    sequence.push(0);
+                    current = 0;
+                }
+                right.forEach(req => {
+                    total += Math.abs(req - current);
+                    current = req;
+                    sequence.push(req);
+                });
+            }
+
+            return {
+                sequence,
+                total,
+                avg: total / requests.length
+            };
+        }
+
+        // 显示结果
+        function displayResults(results) {
+            const output = `
+                <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg">
+                    <h2 class="text-xl font-semibold text-neutral mb-4 flex items-center">
+                        <i class="fa fa-table text-primary mr-2"></i>算法比较结果
+                    </h2>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead>
+                                <tr>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">算法</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">访问序列</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">总寻道长度</th>
+                                    <th class="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">平均寻道长度</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                <tr class="hover:bg-gray-50 transition-smooth">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-primary font-medium">FCFS</span>
+                                    </td>
+                                    <td class="px-6 py-4"><code class="bg-gray-100 px-2 py-1 rounded text-sm">${results.fcfs.sequence.join(' → ')}</code></td>
+                                    <td class="px-6 py-4">${results.fcfs.total}</td>
+                                    <td class="px-6 py-4">${results.fcfs.avg.toFixed(2)}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 transition-smooth">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-secondary font-medium">SSTF</span>
+                                    </td>
+                                    <td class="px-6 py-4"><code class="bg-gray-100 px-2 py-1 rounded text-sm">${results.sstf.sequence.join(' → ')}</code></td>
+                                    <td class="px-6 py-4">${results.sstf.total}</td>
+                                    <td class="px-6 py-4">${results.sstf.avg.toFixed(2)}</td>
+                                </tr>
+                                <tr class="hover:bg-gray-50 transition-smooth">
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span class="text-accent font-medium">SCAN</span>
+                                    </td>
+                                    <td class="px-6 py-4"><code class="bg-gray-100 px-2 py-1 rounded text-sm">${results.scan.sequence.join(' → ')}</code></td>
+                                    <td class="px-6 py-4">${results.scan.total}</td>
+                                    <td class="px-6 py-4">${results.scan.avg.toFixed(2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg">
+                        <h3 class="text-lg font-semibold text-primary mb-3 flex items-center">
+                            <i class="fa fa-chart-line mr-2"></i>性能对比
+                        </h3>
+                        <div class="h-64" id="performanceChart">
+                            <!-- 图表将在这里生成 -->
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg">
+                        <h3 class="text-lg font-semibold text-accent mb-3 flex items-center">
+                            <i class="fa fa-map-signs mr-2"></i>磁头移动轨迹
+                        </h3>
+                        <div class="h-64" id="movementChart">
+                            <!-- 图表将在这里生成 -->
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('results').innerHTML = output;
+            
+            // 绘制性能对比图表
+            drawPerformanceChart(results);
+            
+            // 绘制磁头移动轨迹图表
+            drawMovementChart(results);
+        }
+        
+        // 显示错误信息
+        function displayError(message) {
+            const output = `
+                <div class="bg-white rounded-xl shadow-card p-6 transition-smooth hover:shadow-lg">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 pt-0.5">
+                            <i class="fa fa-exclamation-triangle text-red-500 text-xl"></i>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-lg font-medium text-red-800 mb-1">输入错误</h3>
+                            <div class="mt-2 text-sm text-red-700">
+                                <p>${message}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('results').innerHTML = output;
+        }
+        
+        // 绘制性能对比图表
+        function drawPerformanceChart(results) {
+            const ctx = document.createElement('canvas');
+            document.getElementById('performanceChart').appendChild(ctx);
+            
+            const labels = ['FCFS', 'SSTF', 'SCAN'];
+            const avgData = [results.fcfs.avg, results.sstf.avg, results.scan.avg];
+            const totalData = [results.fcfs.total, results.sstf.total, results.scan.total];
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '平均寻道长度',
+                            data: avgData,
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.7)',
+                                'rgba(16, 185, 129, 0.7)',
+                                'rgba(139, 92, 246, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgb(59, 130, 246)',
+                                'rgb(16, 185, 129)',
+                                'rgb(139, 92, 246)'
+                            ],
+                            borderWidth: 1
+                        },
+                        {
+                            label: '总寻道长度',
+                            data: totalData,
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.3)',
+                                'rgba(16, 185, 129, 0.3)',
+                                'rgba(139, 92, 246, 0.3)'
+                            ],
+                            borderColor: [
+                                'rgb(59, 130, 246)',
+                                'rgb(16, 185, 129)',
+                                'rgb(139, 92, 246)'
+                            ],
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 绘制磁头移动轨迹图表
+        function drawMovementChart(results) {
+            const ctx = document.createElement('canvas');
+            document.getElementById('movementChart').appendChild(ctx);
+            
+            const maxTrack = parseInt(document.getElementById('maxTrack').value);
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: results.fcfs.sequence.map((_, i) => `步骤 ${i+1}`),
+                    datasets: [
+                        {
+                            label: 'FCFS',
+                            data: results.fcfs.sequence,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: 'SSTF',
+                            data: results.sstf.sequence,
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: 'SCAN',
+                            data: results.scan.sequence,
+                            borderColor: 'rgb(139, 92, 246)',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.1,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: maxTrack
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+</body>
+</html>
